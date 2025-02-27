@@ -31,7 +31,7 @@ public class InvoiceService {
     private ItemRepository itemRepository;
     @Autowired
     private InvoiceHistoryRepository invoiceHistoryRepository;
-    public Invoice createInvoice(InvoiceDTO invoiceDTO, int userId) { 
+    public Invoice createInvoice(InvoiceDTO invoiceDTO, int userId) {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
@@ -47,28 +47,36 @@ public class InvoiceService {
         // Handle the list of items
         List<InvoiceItem> invoiceItems = invoiceDTO.getItems().stream()
                 .map(itemDTO -> {
-                    // Get the item from the database using itemId from the DTO
                     Item item = itemRepository.findById(itemDTO.getItemId())
                             .orElseThrow(() -> new IllegalArgumentException("Item not found"));
 
-                    // Create an InvoiceItem entity
                     InvoiceItem invoiceItem = new InvoiceItem();
-                    invoiceItem.setInvoice(invoice);  // Associate with the current invoice
-                    invoiceItem.setItem(item);        // Set the item
-                    invoiceItem.setQuantity(itemDTO.getQuantity());  // Set the quantity
+                    invoiceItem.setInvoice(invoice);  
+                    invoiceItem.setItem(item);        
+                    invoiceItem.setQuantity(itemDTO.getQuantity());  
 
                     return invoiceItem;
                 })
                 .collect(Collectors.toList());
 
-        // Set the invoice items and save them to the database
         invoice.setInvoiceItems(invoiceItems);
         invoiceRepository.save(invoice); // Save invoice with items
+
+        // Format the description string
+        StringBuilder description = new StringBuilder("Invoice created: ");
+        for (InvoiceItemDTO itemDTO : invoiceDTO.getItems()) {
+            Item item = itemRepository.findById(itemDTO.getItemId())
+                    .orElseThrow(() -> new IllegalArgumentException("Item not found"));
+            description.append(item.getName()).append(" (")
+            .append(itemDTO.getQuantity()).append("), ");
+    
+        }
+        description.append("Total: ").append(invoiceDTO.getTotalAmount());
 
         // Record invoice creation in the history
         InvoiceHistory invoiceHistory = new InvoiceHistory();
         invoiceHistory.setInvoiceId(invoice.getId());
-        invoiceHistory.setDescription("Invoice created");
+        invoiceHistory.setDescription(description.toString());
         invoiceHistory.setChangedByUserId(String.valueOf(userId));
         invoiceHistory.setChangedAt(LocalDateTime.now());
         invoiceHistory.setIsDeleted(false);
@@ -76,6 +84,7 @@ public class InvoiceService {
 
         return invoice;
     }
+
 
     public List<Invoice> getInvoicesByUser(int userId) {
         return invoiceRepository.findByUserId(userId);
@@ -108,37 +117,54 @@ public class InvoiceService {
             return null; 
         }
 
-        invoice.setTotalAmount(invoiceDTO.getTotalAmount());
-        invoice.setStatus(invoiceDTO.getStatus());
-
+        // Recalculate total amount based on updated items
+        double updatedTotalAmount = 0;
         List<InvoiceItem> updatedItems = new ArrayList<>();
 
-     for (InvoiceItemDTO itemDTO : invoiceDTO.getItems()) {  
-         InvoiceItem invoiceItem = invoice.getInvoiceItems().stream()
-             .filter(item -> item.getItem().getId() == itemDTO.getItemId())
-             .findFirst()
-             .orElse(null);
+        for (InvoiceItemDTO itemDTO : invoiceDTO.getItems()) {
+            InvoiceItem invoiceItem = invoice.getInvoiceItems().stream()
+                    .filter(item -> item.getItem().getId() == itemDTO.getItemId())
+                    .findFirst()
+                    .orElse(null);
 
-         if (invoiceItem != null) {
-             invoiceItem.setQuantity(itemDTO.getQuantity());
-             updatedItems.add(invoiceItem);  
-         }
-     }
+            if (invoiceItem != null) {
+                invoiceItem.setQuantity(itemDTO.getQuantity());
+                updatedItems.add(invoiceItem);
+                // Add the item's total to the updated total amount
+                updatedTotalAmount += invoiceItem.getItem().getPrice() * itemDTO.getQuantity();
+            }
+        }
 
-     List<InvoiceItem> itemsToRemove = invoice.getInvoiceItems().stream()
-         .filter(invoiceItem -> updatedItems.stream()
-             .noneMatch(updatedItem -> updatedItem.getItem().getId() == invoiceItem.getItem().getId()))
-         .collect(Collectors.toList());
-     invoice.getInvoiceItems().removeAll(itemsToRemove);
+        // Update total amount with the recalculated value
+        invoice.setTotalAmount(updatedTotalAmount);
+
+        // Handle items to be removed (same as before)
+        List<InvoiceItem> itemsToRemove = invoice.getInvoiceItems().stream()
+                .filter(invoiceItem -> updatedItems.stream()
+                        .noneMatch(updatedItem -> updatedItem.getItem().getId() == invoiceItem.getItem().getId()))
+                .collect(Collectors.toList());
+        invoice.getInvoiceItems().removeAll(itemsToRemove);
         invoiceRepository.save(invoice);
 
-        InvoiceHistory invoiceHistory = new InvoiceHistory();
-        invoiceHistory.setInvoiceId(invoice.getId());
-        invoiceHistory.setDescription("Invoice updated");
-        invoiceHistory.setChangedByUserId(String.valueOf(userId));
-        invoiceHistory.setChangedAt(LocalDateTime.now());
-        invoiceHistory.setIsDeleted(false);
-        invoiceHistoryRepository.save(invoiceHistory);
+        // Append new info to the invoice history description
+        InvoiceHistory existingHistory = invoiceHistoryRepository.findByInvoiceId(invoiceId)
+                .orElseThrow(() -> new IllegalArgumentException("Invoice history not found"));
+
+        StringBuilder description = new StringBuilder(existingHistory.getDescription() + " | Invoice updated: ");
+        for (InvoiceItemDTO itemDTO : invoiceDTO.getItems()) {
+            Item item = itemRepository.findById(itemDTO.getItemId())
+                    .orElseThrow(() -> new IllegalArgumentException("Item not found"));
+            description.append(item.getName()).append(" (")
+                    .append(itemDTO.getQuantity()).append("), ");
+        }
+        description.append("Total: ").append(updatedTotalAmount); // Use the recalculated total
+
+        // Update invoice history
+        existingHistory.setDescription(description.toString());
+        existingHistory.setChangedByUserId(String.valueOf(userId));
+        existingHistory.setChangedAt(LocalDateTime.now());
+        existingHistory.setIsDeleted(false);
+        invoiceHistoryRepository.save(existingHistory);
 
         return invoice;
     }
