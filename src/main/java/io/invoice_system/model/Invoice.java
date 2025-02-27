@@ -24,7 +24,7 @@ public class Invoice {
 
 
     @Column(nullable = false)
-    private String status; // e.g., PAID, PENDING
+    private String status; 
 
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<InvoiceItem> invoiceItems;

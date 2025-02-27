@@ -64,6 +64,23 @@ public class InvoiceController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You are not authorized to delete this invoice.");
         }
     }
+    
+    @PutMapping("/{invoiceId}")
+    public ResponseEntity<InvoiceDTO> updateInvoice(@PathVariable int invoiceId, @RequestBody InvoiceDTO invoiceDTO, Principal principal) {
+        String username = principal.getName();
+        UserEntity user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        Invoice updatedInvoice = invoiceService.updateInvoice(invoiceId, invoiceDTO, user.getId());
+
+        
+        if (updatedInvoice == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null); 
+        }
+
+        return ResponseEntity.ok(new InvoiceDTO(updatedInvoice));
+    }
+
 
 }
 

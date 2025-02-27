@@ -2,6 +2,7 @@
 package io.invoice_system.service;
 
 import io.invoice_system.dto.InvoiceDTO;
+import io.invoice_system.dto.InvoiceItemDTO;
 import io.invoice_system.model.Invoice;
 import io.invoice_system.model.InvoiceHistory;
 import io.invoice_system.model.InvoiceItem;
@@ -15,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -97,5 +99,49 @@ public class InvoiceService {
         invoiceRepository.delete(invoice);
         return true;
     }
+    
+    public Invoice updateInvoice(int invoiceId, InvoiceDTO invoiceDTO, int userId) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new IllegalArgumentException("Invoice not found"));
+
+        if (invoice.getUser().getId() != userId) {
+            return null; 
+        }
+
+        invoice.setTotalAmount(invoiceDTO.getTotalAmount());
+        invoice.setStatus(invoiceDTO.getStatus());
+
+        List<InvoiceItem> updatedItems = new ArrayList<>();
+
+     for (InvoiceItemDTO itemDTO : invoiceDTO.getItems()) {  
+         InvoiceItem invoiceItem = invoice.getInvoiceItems().stream()
+             .filter(item -> item.getItem().getId() == itemDTO.getItemId())
+             .findFirst()
+             .orElse(null);
+
+         if (invoiceItem != null) {
+             invoiceItem.setQuantity(itemDTO.getQuantity());
+             updatedItems.add(invoiceItem);  
+         }
+     }
+
+     List<InvoiceItem> itemsToRemove = invoice.getInvoiceItems().stream()
+         .filter(invoiceItem -> updatedItems.stream()
+             .noneMatch(updatedItem -> updatedItem.getItem().getId() == invoiceItem.getItem().getId()))
+         .collect(Collectors.toList());
+     invoice.getInvoiceItems().removeAll(itemsToRemove);
+        invoiceRepository.save(invoice);
+
+        InvoiceHistory invoiceHistory = new InvoiceHistory();
+        invoiceHistory.setInvoiceId(invoice.getId());
+        invoiceHistory.setDescription("Invoice updated");
+        invoiceHistory.setChangedByUserId(String.valueOf(userId));
+        invoiceHistory.setChangedAt(LocalDateTime.now());
+        invoiceHistory.setIsDeleted(false);
+        invoiceHistoryRepository.save(invoiceHistory);
+
+        return invoice;
+    }
+
 
 }
