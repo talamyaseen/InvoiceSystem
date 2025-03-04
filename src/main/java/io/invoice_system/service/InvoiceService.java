@@ -12,39 +12,44 @@ import io.invoice_system.repository.InvoiceHistoryRepository;
 import io.invoice_system.repository.InvoiceRepository;
 import io.invoice_system.repository.ItemRepository;
 import io.invoice_system.repository.UserRepository;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 public class InvoiceService {
 
+    private static final Logger logger = LoggerFactory.getLogger(InvoiceService.class);
     @Autowired
     private InvoiceRepository invoiceRepository;
     @Autowired
-    private UserRepository userRepository;
-    @Autowired
     private ItemRepository itemRepository;
+    
+    @Autowired
+    CustomUserDetailsService customUserDetailsService ;
+    
     @Autowired
     private InvoiceHistoryRepository invoiceHistoryRepository;
-    public Invoice createInvoice(InvoiceDTO invoiceDTO, int userId) {
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-
-        // Create a new invoice
+    
+    public Invoice createInvoice(InvoiceDTO invoiceDTO, UserEntity user) {
+    	logger.info("Creating invoice for user: {}", user.getId());
         Invoice invoice = new Invoice();
         invoice.setTotalAmount(invoiceDTO.getTotalAmount());
         invoice.setStatus(invoiceDTO.getStatus());
         invoice.setUser(user);
-
-        // Save the invoice first, to get the generated ID
         invoiceRepository.save(invoice);
 
-        // Handle the list of items
         List<InvoiceItem> invoiceItems = invoiceDTO.getItems().stream()
                 .map(itemDTO -> {
                     Item item = itemRepository.findById(itemDTO.getItemId())
@@ -60,9 +65,8 @@ public class InvoiceService {
                 .collect(Collectors.toList());
 
         invoice.setInvoiceItems(invoiceItems);
-        invoiceRepository.save(invoice); // Save invoice with items
+        invoiceRepository.save(invoice); 
 
-        // Format the description string
         StringBuilder description = new StringBuilder("Invoice created: ");
         for (InvoiceItemDTO itemDTO : invoiceDTO.getItems()) {
             Item item = itemRepository.findById(itemDTO.getItemId())
@@ -73,51 +77,52 @@ public class InvoiceService {
         }
         description.append("Total: ").append(invoiceDTO.getTotalAmount());
 
-        // Record invoice creation in the history
         InvoiceHistory invoiceHistory = new InvoiceHistory();
         invoiceHistory.setInvoiceId(invoice.getId());
         invoiceHistory.setDescription(description.toString());
-        invoiceHistory.setChangedByUserId(String.valueOf(userId));
+        invoiceHistory.setChangedByUserId(String.valueOf(user.getId()));
         invoiceHistory.setChangedAt(LocalDateTime.now());
         invoiceHistory.setIsDeleted(false);
         invoiceHistoryRepository.save(invoiceHistory);
-
+        logger.info("Invoice created successfully with ID: {}", invoice.getId());
         return invoice;
     }
 
 
-    public List<Invoice> getInvoicesByUser(int userId) {
-        return invoiceRepository.findByUserId(userId);
-    }
 
-    public boolean deleteInvoice(int invoiceId, int userId) {
+    public Page<Invoice> getInvoicesByUser(int userId, Pageable pageable) {
+
+        return invoiceRepository.findByUserId(userId, pageable);
+    }
+    
+    
+    
+    public void deleteInvoice(int invoiceId, UserEntity user) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("Invoice not found"));
-
-        if (invoice.getUser().getId()!=userId) {
-            return false; // User is not authorized to delete this invoice
-        }
-
-        // Mark invoice history as deleted
+        if (!customUserDetailsService.hasRole(user, "Superuser")) 
+            if (invoice.getUser().getId() != user.getId()) {
+            	   throw new AccessDeniedException("Not authorized to delete this invoice");
+            }
         InvoiceHistory invoiceHistory = invoiceHistoryRepository.findByInvoiceId(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("Invoice history not found"));
         invoiceHistory.setIsDeleted(true);
         invoiceHistoryRepository.save(invoiceHistory);
-
-        // Delete the invoice
         invoiceRepository.delete(invoice);
-        return true;
+     
     }
     
-    public Invoice updateInvoice(int invoiceId, InvoiceDTO invoiceDTO, int userId) {
+    
+    
+    public Invoice updateInvoice(int invoiceId, InvoiceDTO invoiceDTO, UserEntity user) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("Invoice not found"));
-
-        if (invoice.getUser().getId() != userId) {
-            return null; 
-        }
-
-        // Recalculate total amount based on updated items
+        
+        logger.info("Updating Invoice with ID: {}", invoiceId);
+        if (!customUserDetailsService.hasRole(user, "Superuser")) 
+            if (invoice.getUser().getId() != user.getId()) {
+            	   throw new AccessDeniedException("Not authorized to delete this invoice");
+            }
         double updatedTotalAmount = 0;
         List<InvoiceItem> updatedItems = new ArrayList<>();
 
@@ -130,15 +135,13 @@ public class InvoiceService {
             if (invoiceItem != null) {
                 invoiceItem.setQuantity(itemDTO.getQuantity());
                 updatedItems.add(invoiceItem);
-                // Add the item's total to the updated total amount
                 updatedTotalAmount += invoiceItem.getItem().getPrice() * itemDTO.getQuantity();
             }
         }
 
-        // Update total amount with the recalculated value
+     
         invoice.setTotalAmount(updatedTotalAmount);
 
-        // Handle items to be removed (same as before)
         List<InvoiceItem> itemsToRemove = invoice.getInvoiceItems().stream()
                 .filter(invoiceItem -> updatedItems.stream()
                         .noneMatch(updatedItem -> updatedItem.getItem().getId() == invoiceItem.getItem().getId()))
@@ -146,7 +149,7 @@ public class InvoiceService {
         invoice.getInvoiceItems().removeAll(itemsToRemove);
         invoiceRepository.save(invoice);
 
-        // Append new info to the invoice history description
+      
         InvoiceHistory existingHistory = invoiceHistoryRepository.findByInvoiceId(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("Invoice history not found"));
 
@@ -157,17 +160,38 @@ public class InvoiceService {
             description.append(item.getName()).append(" (")
                     .append(itemDTO.getQuantity()).append("), ");
         }
-        description.append("Total: ").append(updatedTotalAmount); // Use the recalculated total
+        description.append("Total: ").append(updatedTotalAmount); 
 
-        // Update invoice history
+
         existingHistory.setDescription(description.toString());
-        existingHistory.setChangedByUserId(String.valueOf(userId));
+        existingHistory.setChangedByUserId(String.valueOf(user.getId()));
         existingHistory.setChangedAt(LocalDateTime.now());
         existingHistory.setIsDeleted(false);
         invoiceHistoryRepository.save(existingHistory);
+        logger.info("Invoice ID: {} updated successfully", invoiceId);
 
         return invoice;
     }
+    
+    public InvoiceDTO getInvoiceById(int invoiceId, UserEntity user) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new IllegalArgumentException("Invoice not found"));
+        if (!customUserDetailsService.hasRole(user, "Superuser", "Auditor")) 
+        if (invoice.getUser().getId() != user.getId()) {
+        	   throw new AccessDeniedException("Not authorized to access this invoice");
+        }
+
+        return new InvoiceDTO(invoice);
+    }
+
+
+    public  Page<Invoice> getAllInvoices( Pageable pageable) {
+       
+        return invoiceRepository.findAll(pageable);
+    }
+ 
+
+
 
 
 }

@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -23,7 +24,10 @@ import io.invoice_system.service.CustomUserDetailsService;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
-
+//   @PreAuthorize("hasRole('ADMIN')")
+	/*requestMatchers(HttpMethod.DELETE, "/topics/**").hasRole("ADMIN") 
+                .requestMatchers(HttpMethod.POST, "/topics").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/topics/**").hasRole("ADMIN")*/
     private final JwtAuthEntryPoint authEntryPoint;
     private final CustomUserDetailsService userDetailsService;
 
@@ -32,6 +36,7 @@ public class SecurityConfig {
         this.userDetailsService = userDetailsService;
         this.authEntryPoint = authEntryPoint;
     }
+    
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -42,6 +47,13 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/signup", "/login").permitAll() // Permit public endpoints
+                 .requestMatchers(HttpMethod.DELETE, "/invoices/**").hasAnyRole("SUPPORT_USER", "SUPERUSER")
+                .requestMatchers(HttpMethod.POST, "/invoices").hasAnyRole("SUPPORT_USER", "SUPERUSER")
+                .requestMatchers(HttpMethod.PUT, "/invoices/**").hasAnyRole("SUPPORT_USER", "SUPERUSER")
+                .requestMatchers(HttpMethod.POST, "/execute").hasAnyRole("AUDITOR", "SUPERUSER")
+                .requestMatchers(HttpMethod.POST, "/gemini/promote").hasAnyRole("AUDITOR", "SUPERUSER")
+                .requestMatchers(HttpMethod.POST, "/jan/promote").hasAnyRole("AUDITOR", "SUPERUSER")
+                .requestMatchers(HttpMethod.GET, "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll() 
                 .anyRequest().authenticated() // All other requests should be authenticated
             )
             .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
