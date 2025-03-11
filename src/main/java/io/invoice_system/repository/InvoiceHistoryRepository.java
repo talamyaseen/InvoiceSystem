@@ -9,8 +9,9 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.PagingAndSortingRepository;
 
-public interface InvoiceHistoryRepository extends CrudRepository<InvoiceHistory, Integer> {
+public interface InvoiceHistoryRepository extends CrudRepository<InvoiceHistory, Integer>,PagingAndSortingRepository<InvoiceHistory, Integer> {
 	  Optional<InvoiceHistory> findByInvoiceId(Integer invoiceId);
    
 }

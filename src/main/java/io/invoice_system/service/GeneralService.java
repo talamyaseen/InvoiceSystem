@@ -17,6 +17,7 @@ public class GeneralService {
 	@Autowired
 	AiService aiService;
  
+	
 	public List<Object> executeSql(String question) {
 		String cleaned = question.replaceAll("\\\\n", " ")
                 .replaceAll("(?i)^```sql|```$", " ")

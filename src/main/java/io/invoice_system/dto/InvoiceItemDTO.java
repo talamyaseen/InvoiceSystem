@@ -1,7 +1,9 @@
 package io.invoice_system.dto;
 
-import io.invoice_system.model.InvoiceItem;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import io.invoice_system.model.InvoiceItem;
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class InvoiceItemDTO {
     private int itemId;
     private String itemName;

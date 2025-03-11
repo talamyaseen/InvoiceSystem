@@ -43,7 +43,7 @@ public class AiService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         
-        String content = String.format("if we have table called invoices that have columns(user_id, id, total_amount, status) and want to: %s , just return the sql query without any explanations", question);
+        String content = String.format("if we have table called invoices that have columns(user_id, id, total_amount,created_time, status) and want to: %s , just return the sql query without any explanations", question);
 
         String chatRequestBody = String.format("{\"messages\": [{\"role\": \"user\", \"content\": \"%s\", \"user\": \"Tala\"}], \"model\": \"%s\", \"stream\": false, \"max_tokens\": 200, \"stop\": [\"End\"]}", content, model);
         
@@ -75,6 +75,9 @@ public class AiService {
     
     
     public String getGeminiResponse(String question) {
+        String content = String.format("if we have table called invoices that have columns(user_id, id, total_amount,created_time, status) and want to: %s, just return the sql query without any explanations", question);
+      
+        
         String fullApiUrl = API_URL + apiKey;
         String requestBody = """
                 {
@@ -82,29 +85,22 @@ public class AiService {
                     "parts": [{"text": "%s"}]
                   }]
                 }
-                """.formatted(question);
-        
+                """.formatted(content);
         
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<String> request = new HttpEntity<>(requestBody, headers);
-       
+        
         ResponseEntity<Map> response = restTemplate.exchange(fullApiUrl, HttpMethod.POST, request, Map.class);
-        try {
-			Thread.sleep(10000);
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
         if (response.getStatusCode() == HttpStatus.OK) {
             Map<String, Object> responseBody = response.getBody();
-            System.out.println("hi"+response.getBody());
+            System.out.println("hi" + response.getBody());
             if (responseBody != null && responseBody.containsKey("candidates")) {
                 Map<String, Object> candidate = (Map<String, Object>) ((java.util.List) responseBody.get("candidates")).get(0);
-                Map<String, Object> content = (Map<String, Object>) candidate.get("content");
+                Map<String, Object> contentResponse = (Map<String, Object>) candidate.get("content");
 
-                if (content != null && content.containsKey("parts")) {
-                    Map<String, Object> part = (Map<String, Object>) ((java.util.List) content.get("parts")).get(0);
+                if (contentResponse != null && contentResponse.containsKey("parts")) {
+                    Map<String, Object> part = (Map<String, Object>) ((java.util.List) contentResponse.get("parts")).get(0);
                     if (part != null && part.containsKey("text")) {
                         return (String) part.get("text");
                     }
@@ -114,7 +110,8 @@ public class AiService {
         } else {
             return "Error: " + response.getStatusCode();
         }
-    	
+    }
+
     }
     
-}
+

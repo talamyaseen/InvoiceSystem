@@ -61,9 +61,8 @@ public class AuthController {
         String token = jwtGenerator.generateToken(authentication);
         
         List<String> roles = authentication.getAuthorities().stream()
-                .map(grantedAuthority -> {
-                    // Assuming grantedAuthority is of type Role, you can extract the role name here
-                    return grantedAuthority.getAuthority(); // Or modify this if you have a custom Role object
+                .map(grantedAuthority -> {            
+                    return grantedAuthority.getAuthority(); 
                 })
                 .collect(Collectors.toList());
 

@@ -90,7 +90,7 @@ public class InvoiceController {
     
     @PreAuthorize("hasAnyRole('SUPPORT_USER','SUPERUSER')")
     @PutMapping("/{invoiceId}")
-    public ResponseEntity<InvoiceDTO> updateInvoice(@PathVariable int invoiceId, @RequestBody InvoiceDTO invoiceDTO, Principal principal) {
+    public ResponseEntity<InvoiceDTO> updateInvoice(@PathVariable int invoiceId, @RequestBody InvoiceDTO invoiceDTO, Principal principal)  {
         String username = principal.getName();
         UserEntity user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));

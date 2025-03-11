@@ -29,7 +29,7 @@ public class GeneralController {
 	 
 	 
 	 @PreAuthorize("hasAnyRole('SUPPORT_USER','AUDITOR')")
-	 @PostMapping("/jan/promote")
+	 @PostMapping("/jan/prompt")
 	 public ResponseEntity<List<Object>> janAiTextToSQL(@RequestBody QuestionDTO questionDTO) {	    
 		 
 
@@ -38,7 +38,7 @@ public class GeneralController {
 	    }
 	 
 	 @PreAuthorize("hasAnyRole('SUPPORT_USER','AUDITOR')")
-	 @PostMapping("/gemini/promote")
+	 @PostMapping("/gemini/prompt")
 	 public ResponseEntity<List<Object>> geminiTextToSQL(@RequestBody QuestionDTO questionDTO) {	      
 	            List<Object> result = generalService.promoteToSqlGemini(questionDTO.getQuestion());
 	            return new ResponseEntity<>(result, HttpStatus.OK);

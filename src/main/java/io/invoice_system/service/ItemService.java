@@ -12,7 +12,7 @@ public class ItemService {
     @Autowired
     GeneralRepository generalRepository;
 
-    // Method to fetch all items
+   
     public List<Object> getAllItems() {
         return generalRepository.executeSql("SELECT * FROM items");
     }
